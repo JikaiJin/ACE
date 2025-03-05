@@ -53,41 +53,35 @@ def main(args):
         # Get results data
         mse, bias, std = collect_results(rec_tau_list)
         
-        # Set a clean, professional style with larger default font size
         sns.set_style("whitegrid")
         plt.rcParams['font.family'] = 'serif'
         plt.rcParams['font.size'] = 14
         
-        # Define a colorblind-friendly color palette (will use with tab10 indices)
         colors = ['#4C72B0', '#DD8452', '#55A868', '#C44E52', '#8172B3', '#937860', '#DA8BC3']
         
-        # Create figures with better dimensions
         fig, ax = plt.subplots(figsize=(8, 5))
         fig2, ax2 = plt.subplots(figsize=(8, 5))
         fig3, ax3 = plt.subplots(figsize=(8, 5))
         
-        # Add grid for better readability
         ax.grid(True, linestyle='--', alpha=0.4)
         ax2.grid(True, linestyle='--', alpha=0.4)
         ax3.grid(True, linestyle='--', alpha=0.4)
         
-        # Add reference line with improved visibility
         ax2.plot([-0.5, 9.5], [3., 3.], linestyle='--', color='#1A5276', 
                 linewidth=2.0, label='True Effect', alpha=0.8)
         
-        # Plot data with improved styling
         cmap = plt.get_cmap("tab10")
         for i, m in zip(method_inds[0:r], methods[0:r]):
             if i in [0, 1, 4]:
                 _mse, _bias, _std = mse[:, i], np.abs(bias)[:, i], std[:, i]
                 print("bias: ", _bias, " std: ", _std)
                 
-                # MSE plot with enhanced markers
+                # MSE plot
                 ax.plot(scaled_n_samples, _mse, marker='*', markersize=12, 
                         markeredgecolor='black', markeredgewidth=0.8,
                         linestyle='-', linewidth=2.0, color=cmap(i), label=m)
                 
-                # Bias and std plot with enhanced markers
+                # Bias and std plot
                 ax3.plot(scaled_n_samples, _bias, marker='*', markersize=12, 
                         markeredgecolor='black', markeredgewidth=0.8,
                         linestyle='-', linewidth=2.0, color=cmap(i), label=m+' bias')
@@ -97,7 +91,6 @@ def main(args):
             
             # We compare the results for the 1st and 5th order ACE estimators
             if i == 0 or i == 4:
-                # Enhanced boxplot styling
                 flierprops = dict(marker='o', markerfacecolor=cmap(i), markersize=7,
                                 markeredgecolor='black', markeredgewidth=0.8,
                                 linestyle='none')
