@@ -17,14 +17,27 @@ import argparse
 from joblib import delayed, Parallel
 
 
-def experiment(x, eta, epsilon, tau, s_p, a_p, s_q, a_q, lambda_reg = 0, r = 10, cor = 0.08):
+def experiment(n_samples, n_dim, eta_sample_func, epsilon_sample_func, 
+               tau, s_p, a_p, s_q, a_q, lambda_reg=0, r=10, cor=0.08, seed=42):
+    
+    # Set seed for this specific worker/experiment if provided
+    if seed is not None:
+        np.random.seed(seed)
+
+    # Generate data *inside* the worker
+    x = np.random.normal(size=(n_samples, n_dim))
+    eta = eta_sample_func(n_samples)
+    epsilon = epsilon_sample_func(n_samples)
+
     # Generate price as a function of co-variates
     p = np.dot(x[:, s_p], a_p) + eta + cor * np.multiply(x[:, s_p[0]], eta)
     # Generate demand as a function of price and co-variates
     q = tau * p + np.dot(x[:, s_q], a_q) + epsilon
+    
     model_p = Lasso(alpha=lambda_reg) 
     model_q = Lasso(alpha=lambda_reg)
-    return all_together_cross_fitting(x, p, q, r, model_p = model_p, model_q = model_q)
+    
+    return all_together_cross_fitting(x, p, q, r, model_p=model_p, model_q=model_q)
 
 def main(args):
     os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
@@ -119,13 +132,20 @@ def main(args):
     
     # Coefficients recovered by orthogonal ML
     lambda_reg = np.sqrt(np.log(n_dim)/(n_samples))
+
+    base_seed = opts.seed
+
     results = Parallel(n_jobs=-1, verbose=1)(delayed(experiment)(
-                                            np.random.normal(size=(n_samples, n_dim)),
-                                            eta_sample(n_samples),
-                                            epsilon_sample(n_samples),
-                                            tau, s_p, a_p, s_q, a_q, lambda_reg = lambda_reg,
-                                            cor = cor
+                                            n_samples,
+                                            n_dim,
+                                            eta_sample,
+                                            epsilon_sample,
+                                            tau, s_p, a_p, s_q, a_q, 
+                                            lambda_reg = lambda_reg,
+                                            cor = cor,
+                                            seed = base_seed + t
                                             ) for t in range(n_experiments))
+    
     rec_tau = np.array([tau for tau, _, _, _, _ in results])
     var = np.array([v for _, v, _, _, _ in results])
     first_stage_mse = np.array([[np.linalg.norm(true_coef_p - coef_p), \
@@ -144,42 +164,42 @@ def main(args):
 
     sns.set_style("whitegrid")
     plt.rcParams['font.family'] = 'serif'
-    plt.rcParams['font.size'] = 14  # Increased base font size
+    plt.rcParams['font.size'] = 18
 
     colors = ['#4C72B0', '#DD8452', '#55A868', '#C44E52', '#8172B3']
 
     plt.figure(figsize=(16, 6))
 
     plt.subplot(1, 2, 1)
-    plt.title("Model_p Error Distribution", fontsize=18, fontweight='bold', pad=15)
+    plt.title("Model_p Error Distribution", fontsize=24, fontweight='bold', pad=15)
     n, bins, patches = plt.hist(np.array(first_stage_mse)[:,0].flatten(), 10, density=True,
                             color=colors[0], edgecolor='black', linewidth=1.2, alpha=0.7)
     mean_p = np.mean(np.array(first_stage_mse)[:,0].flatten())
     plt.axvline(mean_p, color=colors[4], linestyle='--', linewidth=2, 
                 label=f'Mean: {mean_p:.4f}')
     plt.grid(True, linestyle='--', alpha=0.4)
-    plt.xlabel("Error Value", fontsize=16, fontweight='bold')
-    plt.ylabel("Density", fontsize=16, fontweight='bold')
-    plt.legend(fontsize=12, frameon=True, framealpha=0.9, edgecolor='black')
-    plt.tick_params(axis='both', which='major', labelsize=14)
+    plt.xlabel("Error Value", fontsize=20, fontweight='bold')
+    plt.ylabel("Density", fontsize=20, fontweight='bold')
+    plt.legend(fontsize=16, frameon=True, framealpha=0.9, edgecolor='black')
+    plt.tick_params(axis='both', which='major', labelsize=18)
 
     plt.subplot(1, 2, 2)
-    plt.title("Model_q Error Distribution", fontsize=18, fontweight='bold', pad=15)
+    plt.title("Model_q Error Distribution", fontsize=24, fontweight='bold', pad=15)
     n, bins, patches = plt.hist(np.array(first_stage_mse)[:,1].flatten(), 10, density=True,
                             color=colors[1], edgecolor='black', linewidth=1.2, alpha=0.7)
     mean_q = np.mean(np.array(first_stage_mse)[:,1].flatten())
     plt.axvline(mean_q, color=colors[4], linestyle='--', linewidth=2, 
                 label=f'Mean: {mean_q:.4f}')
     plt.grid(True, linestyle='--', alpha=0.4)
-    plt.xlabel("Error Value", fontsize=16, fontweight='bold')
-    plt.ylabel("Density", fontsize=16, fontweight='bold')
-    plt.legend(fontsize=12, frameon=True, framealpha=0.9, edgecolor='black')
-    plt.tick_params(axis='both', which='major', labelsize=14)
+    plt.xlabel("Error Value", fontsize=20, fontweight='bold')
+    plt.ylabel("Density", fontsize=20, fontweight='bold')
+    plt.legend(fontsize=16, frameon=True, framealpha=0.9, edgecolor='black')
+    plt.tick_params(axis='both', which='major', labelsize=18)
 
     plt.suptitle(f"Model Error Distributions (n={n_samples}, dim={n_dim}, support={support_size})", 
-                fontsize=20, fontweight='bold', y=0.98)
+                fontsize=26, fontweight='bold', y=0.98)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])  # Leave room for suptitle
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
 
     plt.savefig(os.path.join(ERR_DIR, 'model_errors_n_samples_{}_n_dim_{}_n_exp_{}_support_{}_sigma_q_{}_cor_{}.png'.format(
         n_samples, n_dim, n_experiments, support_size, sigma_q, cor)), dpi=300, bbox_inches='tight')    
@@ -199,14 +219,14 @@ def main(args):
 
     sns.set_style("whitegrid")
     plt.rcParams['font.family'] = 'serif'
-    plt.rcParams['font.size'] = 14
+    plt.rcParams['font.size'] = 18
 
     cmap = plt.get_cmap("tab10")
     flierprops = dict(marker='o', markerfacecolor=cmap(0), markersize=7,
                     markeredgecolor='black', markeredgewidth=0.8,
                     linestyle='none')
 
-    box = ax.boxplot(pred_err.T, whis=[1, 99], patch_artist=True, positions=list(range(6)),
+    box = ax.boxplot(pred_err[1:].T, whis=[1, 99], patch_artist=True, positions=list(range(1, 6)),
                     medianprops=dict(color=cmap(0), linewidth=2.0),
                     boxprops=dict(facecolor='white', color=cmap(0), alpha=0.5),
                     whiskerprops=dict(color=cmap(0), linewidth=1.5),
@@ -217,15 +237,13 @@ def main(args):
     ax.grid(True, linestyle='--', alpha=0.4)
     ax.grid(True, which='minor', linestyle=':', alpha=0.2)
 
-    # Enhanced labels and title
-    ax.set_xlabel("Order of Orthogonality", fontsize=16, fontweight='bold')
-    ax.set_ylabel("Prediction Error (Log Scale)", fontsize=16, fontweight='bold')
-    ax.set_title("Prediction Error by Orthogonality Order", fontsize=18, fontweight='bold', pad=15)
+    ax.set_xlabel("Order of Orthogonality", fontsize=20, fontweight='bold')
+    ax.set_ylabel("Prediction Error (Log Scale)", fontsize=20, fontweight='bold')
+    ax.set_title("Prediction Error by Orthogonality Order", fontsize=24, fontweight='bold', pad=15)
 
-    # Improved axis ticks
-    ax.set_xticks(list(range(6)))
-    ax.set_xticklabels(list(range(1, 7)), fontsize=14)
-    ax.tick_params(axis='y', labelsize=14)
+    ax.set_xticks(list(range(1, 6)))
+    ax.set_xticklabels(list(range(2, 7)), fontsize=18)
+    ax.tick_params(axis='y', labelsize=18)
 
     # Set scale and limits as in original
     ax.set_yscale("log")
@@ -236,12 +254,9 @@ def main(args):
     stats_text = f"Summary: Orders 1-3 median = {np.mean(median_values[:3]):.3f}, Orders 4-6 median = {np.mean(median_values[3:]):.3f}"
     ax.text(0.5, 0.02, stats_text, transform=ax.transAxes, ha='center',
         bbox=dict(boxstyle="round,pad=0.5", facecolor="white", alpha=0.8, edgecolor='lightgray'),
-        fontsize=12)
+        fontsize=16)
 
-    # Adjust layout
     fig.tight_layout()
-
-    # Save the figure with high resolution
     fig.savefig(os.path.join(VAR_EST_DIR, 'var_estimate_n_samples_{}_n_dim_{}_n_exp_{}_support_{}_sigma_q_{}_cor_{}.pdf'.format(
         n_samples, n_dim, n_experiments, support_size, sigma_q, cor)), dpi=300, bbox_inches='tight')
 
@@ -250,7 +265,7 @@ def main(args):
     def plot_estimates(ax, estimate_list, true_tau, plot=True, title="Histogram of estimates"):
         sns.set_style("whitegrid")
         plt.rcParams['font.family'] = 'serif'
-        plt.rcParams['font.size'] = 14
+        plt.rcParams['font.size'] = 18
         
         sigma = np.std(estimate_list)
         mu = np.mean(estimate_list)
@@ -275,20 +290,20 @@ def main(args):
         
         ax.grid(True, linestyle='--', alpha=0.4)
         
-        ax.set_title(f"{title}\nBias: {bias:.4f}, Std: {sigma:.4f}, MSE: {mse:.4f}", 
-                    fontsize=14, fontweight='bold', pad=15)
+        ax.set_title(f"{title}\nBias: {bias:.4f}, Std: {sigma:.4f}, RMSE: {np.sqrt(mse):.4f}", 
+                    fontsize=20, fontweight='bold', pad=15)
         
-        ax.set_xlabel("Estimate Value", fontsize=16, fontweight='bold')
-        ax.set_ylabel("Probability Density", fontsize=16, fontweight='bold')
+        ax.set_xlabel("Estimate Value", fontsize=20, fontweight='bold')
+        ax.set_ylabel("Probability Density", fontsize=20, fontweight='bold')
         
-        ax.legend(fontsize=12, frameon=True, fancybox=True, framealpha=0.9, 
+        ax.legend(fontsize=16, frameon=True, fancybox=True, framealpha=0.9,
                 edgecolor='black', loc='best')
         
-        ax.tick_params(axis='both', labelsize=12)
+        ax.tick_params(axis='both', labelsize=16)
         
         stats_text = f"μ = {mu:.4f}, σ = {sigma:.4f}"
         ax.text(0.97, 0.95, stats_text, transform=ax.transAxes, 
-            ha='right', va='top', fontsize=12, 
+            ha='right', va='top', fontsize=16,
             bbox=dict(boxstyle="round,pad=0.5", facecolor="white", 
                         alpha=0.8, edgecolor='lightgray'))
         
@@ -306,7 +321,7 @@ def main(args):
         """
         sns.set_style("whitegrid")
         plt.rcParams['font.family'] = 'serif'
-        plt.rcParams['font.size'] = 14
+        plt.rcParams['font.size'] = 18
         
         intervals = np.array(intervals)
         
@@ -335,21 +350,21 @@ def main(args):
         interval_widths = intervals[:, 1] - intervals[:, 0]
         avg_width = np.mean(interval_widths)
         
-        margin = avg_width * 0.5  # Add some margin around intervals
+        margin = avg_width * 0.5
         x_min = max(min(intervals[:, 0]) - margin, true_parameter - avg_width * 2)
         x_max = min(max(intervals[:, 1]) + margin, true_parameter + avg_width * 2)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(-1, n_intervals)
         
-        ax.set_xlabel('Parameter Value', fontsize=16, fontweight='bold')
-        ax.set_ylabel('Experiment Number', fontsize=16, fontweight='bold')
+        ax.set_xlabel('Parameter Value', fontsize=20, fontweight='bold')
+        ax.set_ylabel('Experiment Number', fontsize=20, fontweight='bold')
         
         coverage_diff = coverage - 95.0
         coverage_text = f"Coverage: {coverage:.1f}% (Expected: 95.0%)"
         if abs(coverage_diff) > 2:
             coverage_text += f", Difference: {coverage_diff:+.1f}%"
         
-        plt.title(coverage_text, fontsize=18, fontweight='bold', pad=15)
+        plt.title(coverage_text, fontsize=24, fontweight='bold', pad=15)
         
         # Add legend with improved styling
 
@@ -359,22 +374,10 @@ def main(args):
             Patch(facecolor='#C44E52', edgecolor='black', label='Does Not Contain True Parameter'),
             Patch(facecolor='#4C72B0', edgecolor='black', label='True Parameter')
         ]
-        ax.legend(handles=legend_elements, fontsize=12, frameon=True, 
+        ax.legend(handles=legend_elements, fontsize=16, frameon=True,
                 fancybox=True, framealpha=0.9, edgecolor='black')
         
-        # Summary information text box
-        summary_text = (
-            f"Total Intervals: {len(intervals)}\n"
-            f"Showing: {n_intervals}\n"
-            f"Avg. Width: {avg_width:.4f}\n"
-            f"Actual Coverage: {coverage:.1f}%"
-        )
-        
-        plt.figtext(0.02, 0.02, summary_text, fontsize=12,
-                bbox=dict(boxstyle="round,pad=0.5", facecolor="white", 
-                            alpha=0.8, edgecolor='lightgray'))
-        
-        ax.tick_params(axis='both', labelsize=12)
+        ax.tick_params(axis='both', labelsize=16)
         
         if n_intervals > 20:
             step = max(1, n_intervals // 10)

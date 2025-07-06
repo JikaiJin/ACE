@@ -3,9 +3,9 @@ dir=$1
 mkdir -p $dir
 echo $dir
 
-for n_samples in $(seq 2000 2000 20000);
+for n_samples in $(seq 500 500 8000);
 do
-    python3 monte_carlo_single_instance_updated.py --n_samples $n_samples --n_experiments 2000 --n_dim 100 --support_size 40 \
+    python3 monte_carlo_single_instance_updated.py --n_samples $n_samples --n_experiments 20000 --n_dim 100 --support_size 40 \
             --output_dir $dir --seed $((RANDOM % 9999 + 1)) --sigma_q 3 --cor 0.0
 done
 
